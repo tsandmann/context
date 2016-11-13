@@ -225,21 +225,19 @@ public:
     execution_context( execution_context const& other) noexcept = delete;
     execution_context & operator=( execution_context const& other) noexcept = delete;
 
-    execution_context operator()() {
+    void operator()() {
         BOOST_ASSERT( nullptr != fctx_);
-        detail::transfer_t t = detail::jump_fcontext( detail::exchange( fctx_, nullptr), nullptr);
-        return execution_context( t.fctx);
+        fctx_ = detail::jump_fcontext( detail::exchange( fctx_, nullptr), nullptr).fctx;
     }
 
     template< typename Fn >
-    execution_context operator()( exec_ontop_arg_t, Fn && fn) {
+    void operator()( exec_ontop_arg_t, Fn && fn) {
         BOOST_ASSERT( nullptr != fctx_);
         std::tuple< Fn > p = std::forward_as_tuple( fn);
-        detail::transfer_t t = detail::ontop_fcontext(
+        fctx_ = detail::ontop_fcontext(
                 detail::exchange( fctx_, nullptr),
                 & p,
-                detail::context_ontop_void< execution_context, Fn >);
-        return execution_context( t.fctx);
+                detail::context_ontop_void< execution_context, Fn >).fctx;
     }
 
     explicit operator bool() const noexcept {

@@ -32,9 +32,7 @@ public:
                     for (;;) {
                         int i = boost::get<int>(data);
                         data = boost::lexical_cast<std::string>(i);
-                        auto result = ctx( data);
-                        ctx = std::move( std::get<0>( result) );
-                        data = std::get<1>( result);
+                        data = ctx( data);
                     }
                 } catch ( std::bad_cast const&) {
                     excptr_=std::current_exception();
@@ -45,9 +43,7 @@ public:
 
     std::string operator()(int i){
         variant_t data = i;
-        auto result = ctx_( data);
-        ctx_ = std::move( std::get<0>( result) );
-        data = std::get<1>( result);
+        data = ctx_( data);
         if(excptr_){
             std::rethrow_exception(excptr_);
         }

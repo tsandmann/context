@@ -149,9 +149,9 @@ ctx::execution_context< void > fn4( ctx::execution_context< void > && ctx) {
 ctx::execution_context< void > fn6( ctx::execution_context< void > && ctx) {
     try {
         value1 = 3;
-        ctx = ctx();
+        ctx();
         value1 = 7;
-        ctx = ctx();
+        ctx();
     } catch ( my_exception & e) {
         value2 = e.what();
         ctx = std::move( e.ctx);
@@ -161,7 +161,8 @@ ctx::execution_context< void > fn6( ctx::execution_context< void > && ctx) {
 
 ctx::execution_context< void > fn7( ctx::execution_context< void > && ctx) {
     Y y;
-    return ctx();
+    ctx();
+    return std::move( ctx);
 }
 
 ctx::execution_context< int > fn8( ctx::execution_context< int > && ctx, int i) {
@@ -171,35 +172,34 @@ ctx::execution_context< int > fn8( ctx::execution_context< int > && ctx, int i) 
 
 ctx::execution_context< int > fn9( ctx::execution_context< int > && ctx, int i) {
     value1 = i;
-    std::tie( ctx, i) = ctx( i);
-    value1 = i;
+    value1 = ctx( i);
     return std::move( ctx);
 }
 
 ctx::execution_context< int & > fn10( ctx::execution_context< int & > && ctx, int & i) {
-    std::tie( ctx, i) = ctx( i);
+    i = ctx( i);
     return std::move( ctx);
 }
 
 ctx::execution_context< moveable > fn11( ctx::execution_context< moveable > && ctx, moveable m) {
-    std::tie( ctx, m) = ctx( std::move( m) );
+    m = ctx( std::move( m) );
     return std::move( ctx);
 }
 
 ctx::execution_context< int, std::string > fn12( ctx::execution_context< int, std::string > && ctx, int i, std::string str) {
-    std::tie( ctx, i, str) = ctx( i, str);
+    std::tie( i, str) = ctx( i, str);
     return std::move( ctx);
 }
 
 ctx::execution_context< int, moveable > fn13( ctx::execution_context< int, moveable > && ctx, int i, moveable m) {
-    std::tie( ctx, i, m) = ctx( i, std::move( m) );
+    std::tie( i, m) = ctx( i, std::move( m) );
     return std::move( ctx);
 }
 
 ctx::execution_context< variant_t > fn14( ctx::execution_context< variant_t > && ctx, variant_t data) {
     int i = boost::get< int >( data);
     data = boost::lexical_cast< std::string >( i);
-    std::tie( ctx, data) = ctx( data);
+    data = ctx( data);
     return std::move( ctx);
 }
 
@@ -210,8 +210,7 @@ ctx::execution_context< Y * > fn15( ctx::execution_context< Y * > && ctx, Y * py
 
 ctx::execution_context< int > fn16( ctx::execution_context< int > && ctx, int i) {
     value1 = i;
-    std::tie( ctx, i) = ctx( i);
-    value1 = i;
+    value1 = ctx( i);
     return std::move( ctx);
 }
 
@@ -254,14 +253,14 @@ void test_exception() {
 #ifdef BOOST_MSVC
     {
         bool catched = false;
-	std::thread([&catched](){
-            ctx::execution_context< void > ctx([&catched](ctx::execution_context< void > && ctx){
-                seh( catched);
-                return std::move( ctx);
-	    });
-            BOOST_CHECK( ctx);
-            ctx();
-        }).join();
+        std::thread([&catched](){
+                ctx::execution_context< void > ctx([&catched](ctx::execution_context< void > && ctx){
+                        seh( catched);
+                        return std::move( ctx);
+                        });
+                BOOST_CHECK( ctx);
+                ctx();
+                }).join();
         BOOST_CHECK( catched);
     }
 #endif
@@ -305,7 +304,7 @@ void test_ontop() {
         value1 = 0;
         value2 = "";
         ctx::execution_context< void > ctx( fn6);
-        ctx = ctx();
+        ctx();
         BOOST_CHECK_EQUAL( 3, value1);
         BOOST_CHECK( value2.empty() );
     }
@@ -313,7 +312,7 @@ void test_ontop() {
         value1 = 0;
         int i = 3, j = 0;
         ctx::execution_context< int > ctx( fn16);
-        std::tie( ctx, j) = ctx( ctx::exec_ontop_arg,
+        j = ctx( ctx::exec_ontop_arg,
                 [](ctx::execution_context< int > ctx, int x){
                     return std::make_tuple( std::move( ctx), x);
                 },
@@ -326,11 +325,11 @@ void test_ontop() {
         value1 = 0;
         int i = 3, j = 0;
         ctx::execution_context< int > ctx( fn16);
-        std::tie( ctx, j) = ctx( i);
+        j = ctx( i);
         BOOST_CHECK_EQUAL( i, j);
         BOOST_CHECK_EQUAL( i, value1);
         value1 = 0;
-        std::tie( ctx, j) = ctx( ctx::exec_ontop_arg,
+        j = ctx( ctx::exec_ontop_arg,
                 [](ctx::execution_context< int > ctx, int x){
                     return std::make_tuple( std::move( ctx), 2*x);
                 },
@@ -345,7 +344,7 @@ void test_ontop() {
         BOOST_CHECK( -1 == m2.value);
         BOOST_CHECK( ! m2.state);
         ctx::execution_context< moveable > ctx( fn11);
-        std::tie( ctx, m2) = ctx( ctx::exec_ontop_arg,
+        m2 = ctx( ctx::exec_ontop_arg,
                 [](ctx::execution_context< moveable > ctx, moveable m){
                     return std::make_tuple( std::move( ctx), std::move( m) );
                 },
@@ -361,7 +360,7 @@ void test_ontop_exception() {
     value1 = 0;
     value2 = "";
     ctx::execution_context< void > ctx( fn6);
-    ctx = ctx();
+    ctx();
     BOOST_CHECK_EQUAL( 3, value1);
     const char * what = "hello world";
     ctx( ctx::exec_ontop_arg,
@@ -378,7 +377,7 @@ void test_termination() {
         value1 = 0;
         ctx::execution_context< void > ctx( fn7);
         BOOST_CHECK_EQUAL( 0, value1);
-        ctx = ctx();
+        ctx();
         BOOST_CHECK_EQUAL( 3, value1);
     }
     BOOST_CHECK_EQUAL( 7, value1);
@@ -397,12 +396,12 @@ void test_termination() {
         int i = 3, j = 0;
         ctx::execution_context< int > ctx( fn9);
         BOOST_CHECK( ctx);
-        std::tie( ctx, j) = ctx( i);
+        j = ctx( i);
         BOOST_CHECK_EQUAL( i, value1);
         BOOST_CHECK( ctx);
         BOOST_CHECK_EQUAL( i, j);
         i = 7;
-        std::tie( ctx, j) = ctx( i);
+        j = ctx( i);
         BOOST_CHECK_EQUAL( i, value1);
         BOOST_CHECK( ! ctx);
         BOOST_CHECK_EQUAL( i, j);
@@ -419,7 +418,7 @@ void test_one_arg() {
     {
         int i = 3, j = 0;
         ctx::execution_context< int > ctx( fn9);
-        std::tie( ctx, j) = ctx( i);
+        j = ctx( i);
         BOOST_CHECK_EQUAL( i, j);
     }
     {
@@ -428,14 +427,14 @@ void test_one_arg() {
         BOOST_CHECK( & i != & k);
         BOOST_CHECK( & j == & k);
         ctx::execution_context< int & > ctx( fn10);
-        std::tie( ctx, k) = ctx( i);
+        k = ctx( i);
         BOOST_CHECK( & i != & k);
     }
     {
         Y y;
         Y * py = nullptr;
         ctx::execution_context< Y * > ctx( fn15);
-        std::tie( ctx, py) = ctx( & y);
+        py = ctx( & y);
         BOOST_CHECK( py == & y);
     }
     {
@@ -445,7 +444,7 @@ void test_one_arg() {
         BOOST_CHECK( -1 == m2.value);
         BOOST_CHECK( ! m2.state);
         ctx::execution_context< moveable > ctx( fn11);
-        std::tie( ctx, m2) = ctx( std::move( m1) );
+        m2 = ctx( std::move( m1) );
         BOOST_CHECK( -1 == m1.value);
         BOOST_CHECK( ! m1.state);
         BOOST_CHECK( 7 == m2.value);
@@ -458,7 +457,7 @@ void test_two_args() {
         int i1 = 3, i2 = 0;
         std::string str1("abc"), str2;
         ctx::execution_context< int, std::string > ctx( fn12);
-        std::tie( ctx, i2, str2) = ctx( i1, str1);
+        std::tie( i2, str2) = ctx( i1, str1);
         BOOST_CHECK_EQUAL( i1, i2);
         BOOST_CHECK_EQUAL( str1, str2);
     }
@@ -470,7 +469,7 @@ void test_two_args() {
         BOOST_CHECK( -1 == m2.value);
         BOOST_CHECK( ! m2.state);
         ctx::execution_context< int, moveable > ctx( fn13);
-        std::tie( ctx, i2, m2) = ctx( i1, std::move( m1) );
+        std::tie( i2, m2) = ctx( i1, std::move( m1) );
         BOOST_CHECK_EQUAL( i1, i2);
         BOOST_CHECK( -1 == m1.value);
         BOOST_CHECK( ! m1.state);
@@ -484,7 +483,7 @@ void test_variant() {
         int i = 7;
         variant_t data1 = i, data2;
         ctx::execution_context< variant_t > ctx( fn14);
-        std::tie( ctx, data2) = ctx( data1);
+        data2 = ctx( data1);
         std::string str = boost::get< std::string >( data2);
         BOOST_CHECK_EQUAL( std::string("7"), str);
     }

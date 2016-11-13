@@ -13,7 +13,7 @@ namespace ctx = boost::context;
 
 ctx::execution_context< int > f1( ctx::execution_context< int > && ctxm, int data) {
     std::cout << "f1: entered first time: " << data << std::endl;
-    std::tie( ctxm, data) = ctxm( data + 2);
+    data = ctxm( data + 2);
     std::cout << "f1: entered second time: " << data << std::endl;
     return std::move( ctxm);
 }
@@ -21,9 +21,9 @@ ctx::execution_context< int > f1( ctx::execution_context< int > && ctxm, int dat
 int main() {
     int data = 1;
     ctx::execution_context< int > ctx1( f1);
-    std::tie( ctx1, data) = ctx1( data + 2);
+    data = ctx1( data + 2);
     std::cout << "f1: returned first time: " << data << std::endl;
-    std::tie( ctx1, data) = ctx1( data + 2);
+    data = ctx1( data + 2);
     std::cout << "f1: returned second time: " << data << std::endl;
 
     std::cout << "main: done" << std::endl;

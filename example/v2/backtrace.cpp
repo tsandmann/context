@@ -52,7 +52,7 @@ ctx::execution_context< void > f1( ctx::execution_context< void > && ctxm) {
 
 int main() {
     ctx::execution_context< void > ctx1( f1);
-    ctx1 = ctx1();
+    ctx1();
     std::cout << "main: done" << std::endl;
     return EXIT_SUCCESS;
 }

@@ -19,8 +19,7 @@ int main() {
             int a=0;
             int b=1;
             while(n-->0){
-                auto result=sink(a);
-                sink=std::move(std::get<0>(result));
+                sink(a);
                 auto next=a+b;
                 a=b;
                 b=next;
@@ -28,9 +27,7 @@ int main() {
             return std::move( sink);
         });
     for(int i=0;i<10;++i){
-        auto result=source(i);
-        source=std::move(std::get<0>(result));
-        std::cout<<std::get<1>(result)<<" ";
+        std::cout<<source(i)<<" ";
     }
     std::cout<<std::endl;
 

@@ -23,7 +23,7 @@ boost::context::execution_context<void> f1(boost::context::execution_context<voi
     try {
         for (;;) {
             std::cout << "f1()" << std::endl;
-            ctx = ctx();
+            ctx();
         }
     } catch ( my_exception & e) {
         std::cout << "f1(): my_exception catched" << std::endl;
@@ -39,9 +39,9 @@ boost::context::execution_context<void> f2(boost::context::execution_context<voi
 
 int main() {
     boost::context::execution_context< void > ctx( f1);
-    ctx = ctx();
-    ctx = ctx();
-    ctx = ctx( boost::context::exec_ontop_arg, f2);
+    ctx();
+    ctx();
+    ctx( boost::context::exec_ontop_arg, f2);
 
     std::cout << "main: done" << std::endl;
 

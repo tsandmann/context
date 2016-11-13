@@ -137,7 +137,7 @@ public:
 
     transfer_t run( transfer_t t) {
         Ctx from{ t.fctx };
-        typename Ctx::args_tpl_t args = std::move( * static_cast< typename Ctx::args_tpl_t * >( t.data) );
+        typename Ctx::args_t args = std::move( * static_cast< typename Ctx::args_t * >( t.data) );
         auto tpl = std::tuple_cat(
                     params_,
                     std::forward_as_tuple( std::move( from) ),
@@ -209,13 +209,37 @@ fcontext_t context_create( preallocated palloc, StackAlloc salloc, Fn && fn, Par
     return jump_fcontext( fctx, rec).fctx;
 }
 
+template< int N, typename ... Args >
+struct return_type {
+    typedef std::tuple< typename std::decay< Args >::type ... > type;
+
+    template< typename Data >
+    static type result( Data & data) {
+        return std::move( data);
+    }
+};
+
+template< typename ... Args >
+struct return_type< 1, Args ... > {
+    typedef typename std::decay< Args ... >::type type;
+
+    template< typename Data >
+    static type result( Data & data) {
+        return std::move( std::get< 0 >( data) );
+    }
+};
+
 }
 
 template< typename ... Args >
 class execution_context {
 private:
-    typedef std::tuple< Args ... >     args_tpl_t;
-    typedef std::tuple< execution_context, typename std::decay< Args >::type ... >               ret_tpl_t;
+    typedef std::tuple< Args ... >      args_t;
+    typedef detail::return_type<
+        sizeof ... (Args),
+        Args ...
+    >                                   return_type;
+    typedef typename return_type::type  ret_t;
 
     template< typename Ctx, typename StackAlloc, typename Fn, typename ... Params >
     friend class detail::record;
@@ -312,29 +336,31 @@ public:
     execution_context( execution_context const& other) noexcept = delete;
     execution_context & operator=( execution_context const& other) noexcept = delete;
 
-    ret_tpl_t operator()( Args ... args) {
+    ret_t operator()( Args ... args) {
         BOOST_ASSERT( nullptr != fctx_);
-        args_tpl_t data( std::forward< Args >( args) ... );
+        args_t data( std::forward< Args >( args) ... );
         detail::transfer_t t = detail::jump_fcontext( detail::exchange( fctx_, nullptr), & data);
         if ( nullptr != t.data) {
-            data = std::move( * static_cast< args_tpl_t * >( t.data) );
+            data = std::move( * static_cast< args_t * >( t.data) );
         }
-        return std::tuple_cat( std::forward_as_tuple( execution_context( t.fctx) ), std::move( data) );
+        fctx_ = t.fctx;
+        return return_type::result( data);
     }
 
     template< typename Fn >
-    ret_tpl_t operator()( exec_ontop_arg_t, Fn && fn, Args ... args) {
+    ret_t operator()( exec_ontop_arg_t, Fn && fn, Args ... args) {
         BOOST_ASSERT( nullptr != fctx_);
-        args_tpl_t data{ std::forward< Args >( args) ... };
+        args_t data{ std::forward< Args >( args) ... };
         auto p = std::make_tuple( fn, std::move( data) );
         detail::transfer_t t = detail::ontop_fcontext(
                 detail::exchange( fctx_, nullptr),
                 & p,
                 detail::context_ontop< execution_context, Fn, Args ... >);
         if ( nullptr != t.data) {
-            data = std::move( * static_cast< args_tpl_t * >( t.data) );
+            data = std::move( * static_cast< args_t * >( t.data) );
         }
-        return std::tuple_cat( std::forward_as_tuple( execution_context( t.fctx) ), std::move( data) );
+        fctx_ = t.fctx;
+        return return_type::result( data);
     }
 
     explicit operator bool() const noexcept {

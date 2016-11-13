@@ -28,7 +28,7 @@ boost::context::execution_context< int > echo( boost::context::execution_context
         std::cout << i;
         echoSSE( i);
         std::cout << " ";
-        std::tie( ctx, i) = ctx( 0);
+        i = ctx( 0);
     }
     return std::move( ctx);
 }
@@ -36,7 +36,7 @@ boost::context::execution_context< int > echo( boost::context::execution_context
 int main( int argc, char * argv[]) {
     boost::context::execution_context< int > ctx( echo);
     for ( int i = 0; i < 10; ++i) {
-        ctx = std::get< 0 >( ctx( i) );
+        ctx( i);
     }
     std::cout << "\nDone" << std::endl;
     return EXIT_SUCCESS;
