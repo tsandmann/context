@@ -12,11 +12,6 @@
 #include <boost/context/all.hpp>
 
 struct my_exception {
-    boost::context::execution_context< void >   ctx;
-
-    my_exception( boost::context::execution_context< void > && ctx_) :
-        ctx( std::forward< boost::context::execution_context< void > >( ctx_) ) {
-    }
 };
 
 boost::context::execution_context<void> f1(boost::context::execution_context<void> && ctx) {
@@ -27,14 +22,12 @@ boost::context::execution_context<void> f1(boost::context::execution_context<voi
         }
     } catch ( my_exception & e) {
         std::cout << "f1(): my_exception catched" << std::endl;
-        ctx = std::move( e.ctx);
     }
     return std::move( ctx);
 }
 
-boost::context::execution_context<void> f2(boost::context::execution_context<void> && ctx) {
-    throw my_exception( std::move( ctx) );
-    return std::move( ctx);
+void f2() {
+    throw my_exception();
 }
 
 int main() {

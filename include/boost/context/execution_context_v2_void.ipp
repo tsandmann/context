@@ -8,15 +8,17 @@ namespace detail {
 
 template< typename Ctx, typename Fn >
 transfer_t context_ontop_void( transfer_t t) {
-    auto tpl = static_cast< std::tuple< Fn > * >( t.data);
+    auto tpl = static_cast< std::tuple< Fn, std::exception_ptr > * >( t.data);
     BOOST_ASSERT( nullptr != tpl);
     typename std::decay< Fn >::type fn = std::forward< Fn >( std::get< 0 >( * tpl) );
-    Ctx ctx{ t.fctx };
-    // execute function
-    ctx = apply(
-            fn,
-            std::forward_as_tuple( std::move( ctx) ) );
-    return { exchange( ctx.fctx_, nullptr), nullptr };
+    try {
+        // execute function
+        fn();
+    } catch (...) {
+        std::get< 1 >( * tpl) = std::current_exception();
+        return { t.fctx, & std::get< 1 >( * tpl )  };
+    }
+    return { t.fctx, nullptr };
 }
 
 template< typename Ctx, typename StackAlloc, typename Fn, typename ... Params >
@@ -227,17 +229,27 @@ public:
 
     void operator()() {
         BOOST_ASSERT( nullptr != fctx_);
-        fctx_ = detail::jump_fcontext( detail::exchange( fctx_, nullptr), nullptr).fctx;
+        detail::transfer_t t = detail::jump_fcontext( detail::exchange( fctx_, nullptr), nullptr);
+        fctx_ = t.fctx;
+        if ( nullptr != t.data) {
+            std::exception_ptr * eptr = static_cast< std::exception_ptr * >( t.data);
+            std::rethrow_exception( * eptr);
+        }
     }
 
     template< typename Fn >
     void operator()( exec_ontop_arg_t, Fn && fn) {
         BOOST_ASSERT( nullptr != fctx_);
-        std::tuple< Fn > p = std::forward_as_tuple( fn);
-        fctx_ = detail::ontop_fcontext(
+        std::tuple< Fn, std::exception_ptr > p = std::forward_as_tuple( fn, std::exception_ptr{} );
+        detail::transfer_t t = detail::ontop_fcontext(
                 detail::exchange( fctx_, nullptr),
                 & p,
-                detail::context_ontop_void< execution_context, Fn >).fctx;
+                detail::context_ontop_void< execution_context, Fn >);
+        fctx_ = t.fctx;
+        if ( nullptr != t.data) {
+            std::exception_ptr * eptr = static_cast< std::exception_ptr * >( t.data);
+            std::rethrow_exception( * eptr);
+        }
     }
 
     explicit operator bool() const noexcept {

@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <ostream>
@@ -84,22 +85,18 @@ void context_entry( transfer_t t_) noexcept {
 
 template< typename Ctx, typename Fn, typename ... Args >
 transfer_t context_ontop( transfer_t t) {
-    auto tpl = static_cast< std::tuple< Fn, std::tuple< Args ... > > * >( t.data);
+    auto tpl = static_cast< std::tuple< Fn, std::tuple< std::exception_ptr, std::tuple< Args ... > > > * >( t.data);
     BOOST_ASSERT( nullptr != tpl);
     typename std::decay< Fn >::type fn = std::forward< Fn >( std::get< 0 >( * tpl) );
-    auto args = std::move( std::get< 1 >( * tpl) );
-    Ctx ctx{ t.fctx };
-    // execute function
-    auto result = apply(
-            fn,
-            std::tuple_cat(
-                std::forward_as_tuple( std::move( ctx) ),
-                std::move( args) ) );
-    ctx = std::move( std::get< 0 >( result) );
+    auto args = std::move( std::get< 1 >( std::get< 1 >( * tpl) ) );
+    try {
+        // execute function
+        std::get< 1 >( std::get< 1 >( * tpl) ) = apply( fn, std::move( args) );
+    } catch (...) {
+        std::get< 0 >( std::get< 1 >( * tpl) ) = std::current_exception();
+    }
     // apply returned data
-    detail::tail( args) = std::move( result);
-    std::get< 1 >( * tpl) = std::move( args);
-    return { exchange( ctx.fctx_, nullptr), & std::get< 1 >( * tpl) };
+    return { t.fctx, & std::get< 1 >( * tpl) };
 }
 
 template< typename Ctx, typename StackAlloc, typename Fn, typename ... Params >
@@ -210,7 +207,7 @@ fcontext_t context_create( preallocated palloc, StackAlloc salloc, Fn && fn, Par
 }
 
 template< int N, typename ... Args >
-struct return_type {
+struct return_type_helper {
     typedef std::tuple< typename std::decay< Args >::type ... > type;
 
     template< typename Data >
@@ -220,7 +217,7 @@ struct return_type {
 };
 
 template< typename ... Args >
-struct return_type< 1, Args ... > {
+struct return_type_helper< 1, Args ... > {
     typedef typename std::decay< Args ... >::type type;
 
     template< typename Data >
@@ -234,12 +231,12 @@ struct return_type< 1, Args ... > {
 template< typename ... Args >
 class execution_context {
 private:
-    typedef std::tuple< Args ... >      args_t;
-    typedef detail::return_type<
+    typedef std::tuple< Args ... >              args_t;
+    typedef detail::return_type_helper<
         sizeof ... (Args),
         Args ...
-    >                                   return_type;
-    typedef typename return_type::type  ret_t;
+    >                                           helper_t;
+    typedef typename helper_t::type             ret_t;
 
     template< typename Ctx, typename StackAlloc, typename Fn, typename ... Params >
     friend class detail::record;
@@ -338,29 +335,41 @@ public:
 
     ret_t operator()( Args ... args) {
         BOOST_ASSERT( nullptr != fctx_);
-        args_t data( std::forward< Args >( args) ... );
-        detail::transfer_t t = detail::jump_fcontext( detail::exchange( fctx_, nullptr), & data);
-        if ( nullptr != t.data) {
-            data = std::move( * static_cast< args_t * >( t.data) );
-        }
+        args_t data{ std::forward< Args >( args) ... };
+        std::tuple< std::exception_ptr, args_t > tpl{ std::exception_ptr{}, std::move( data) };
+        detail::transfer_t t = detail::jump_fcontext( detail::exchange( fctx_, nullptr), & tpl);
         fctx_ = t.fctx;
-        return return_type::result( data);
+        if ( nullptr != t.data) {
+            auto tmp = static_cast< std::tuple< std::exception_ptr, args_t > * >( t.data);
+            std::exception_ptr eptr = std::get< 0 >( * tmp);
+            if ( eptr) {
+                std::rethrow_exception( eptr);
+            }
+            data = std::move( std::get< 1 >( * tmp) );
+        }
+        return helper_t::result( data);
     }
 
     template< typename Fn >
     ret_t operator()( exec_ontop_arg_t, Fn && fn, Args ... args) {
         BOOST_ASSERT( nullptr != fctx_);
         args_t data{ std::forward< Args >( args) ... };
-        auto p = std::make_tuple( fn, std::move( data) );
+        std::tuple< std::exception_ptr, args_t > tpl{ std::exception_ptr{}, std::move( data) };
+        auto p = std::make_tuple( fn, std::move( tpl) );
         detail::transfer_t t = detail::ontop_fcontext(
                 detail::exchange( fctx_, nullptr),
                 & p,
                 detail::context_ontop< execution_context, Fn, Args ... >);
-        if ( nullptr != t.data) {
-            data = std::move( * static_cast< args_t * >( t.data) );
-        }
         fctx_ = t.fctx;
-        return return_type::result( data);
+        if ( nullptr != t.data) {
+            auto tmp = static_cast< std::tuple< std::exception_ptr, args_t > * >( t.data);
+            std::exception_ptr eptr = std::get< 0 >( * tmp);
+            if ( eptr) {
+                std::rethrow_exception( eptr);
+            }
+            data = std::move( std::get< 1 >( * tmp) );
+        }
+        return helper_t::result( data);
     }
 
     explicit operator bool() const noexcept {

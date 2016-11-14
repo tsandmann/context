@@ -95,11 +95,8 @@ public:
 };
 
 struct my_exception : public std::runtime_error {
-    ctx::execution_context< void >   ctx;
-
-    my_exception( char const* what, ctx::execution_context< void > && ctx_) :
-        std::runtime_error( what),
-        ctx( std::forward< ctx::execution_context< void > >( ctx_) ) {
+    my_exception( char const* what) :
+        std::runtime_error( what) {
     }
 };
 
@@ -154,7 +151,6 @@ ctx::execution_context< void > fn6( ctx::execution_context< void > && ctx) {
         ctx();
     } catch ( my_exception & e) {
         value2 = e.what();
-        ctx = std::move( e.ctx);
     }
     return std::move( ctx);
 }
@@ -313,8 +309,8 @@ void test_ontop() {
         int i = 3, j = 0;
         ctx::execution_context< int > ctx( fn16);
         j = ctx( ctx::exec_ontop_arg,
-                [](ctx::execution_context< int > ctx, int x){
-                    return std::make_tuple( std::move( ctx), x);
+                [](int x){
+                    return x;
                 },
                 i);
         BOOST_CHECK( ctx);
@@ -330,8 +326,8 @@ void test_ontop() {
         BOOST_CHECK_EQUAL( i, value1);
         value1 = 0;
         j = ctx( ctx::exec_ontop_arg,
-                [](ctx::execution_context< int > ctx, int x){
-                    return std::make_tuple( std::move( ctx), 2*x);
+                [](int x){
+                    return 2*x;
                 },
                 i);
         BOOST_CHECK( ! ctx);
@@ -345,8 +341,8 @@ void test_ontop() {
         BOOST_CHECK( ! m2.state);
         ctx::execution_context< moveable > ctx( fn11);
         m2 = ctx( ctx::exec_ontop_arg,
-                [](ctx::execution_context< moveable > ctx, moveable m){
-                    return std::make_tuple( std::move( ctx), std::move( m) );
+                [](moveable m){
+                    return m;
                 },
                 std::move( m1) );
         BOOST_CHECK( -1 == m1.value);
@@ -364,9 +360,8 @@ void test_ontop_exception() {
     BOOST_CHECK_EQUAL( 3, value1);
     const char * what = "hello world";
     ctx( ctx::exec_ontop_arg,
-         [what](ctx::execution_context< void > && ctx){
-            throw my_exception( what, std::move( ctx) );
-            return std::move( ctx);
+         [what](){
+            throw my_exception( what);
          });
     BOOST_CHECK_EQUAL( 3, value1);
     BOOST_CHECK_EQUAL( std::string( what), value2);
