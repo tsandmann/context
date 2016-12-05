@@ -4,6 +4,7 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
+#include <array>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -546,6 +547,30 @@ void test_bug12215() {
 }
 #endif
 
+void stack_overflow( int n) {
+    if ( n == 0xdeadbeef) {
+        return;
+    }
+    std::array< char, 8192 > blob;
+    stack_overflow( n + 1);
+    // Prevent blob from being optimized away
+    std::memcpy( blob.data(), blob.data(), n);
+    std::cout << blob.data();
+}
+
+void test_bug12592() {
+    // Calling stack_overflow outside of Boost context results in a regular stack
+    // overflow exception.
+    // stack_overflow(0);
+    ctx::execution_context< void > ctx([](ctx::execution_context< void > && ctx) {
+            // Calling stack_overflow inside results in a memory access violation caused
+            // by the compiler generated _chkstk function.
+            stack_overflow( 0);
+            return std::move( ctx);
+            });
+    ctx();
+}
+
 boost::unit_test::test_suite * init_unit_test_suite( int, char* [])
 {
     boost::unit_test::test_suite * test =
@@ -566,6 +591,7 @@ boost::unit_test::test_suite * init_unit_test_suite( int, char* [])
     test->add( BOOST_TEST_CASE( & test_variant) );
 #ifdef BOOST_WINDOWS
     test->add( BOOST_TEST_CASE( & test_bug12215) );
+    test->add( BOOST_TEST_CASE( & test_bug12592) );
 #endif
 
     return test;
