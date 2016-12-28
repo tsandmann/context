@@ -108,12 +108,11 @@ int main() {
                     p.run();
                     // resume main execution context
                     return std::move(sink);
-                },
-                '\0');
+                });
         while(ctx::has_data(source)){
             char c=ctx::data<char>(source);
             printf("Parsed: %c\n",c);
-            source=ctx::callcc(std::move(source),'\0');
+            source=ctx::callcc(std::move(source) );
             if (!c) {
                 break;
             }
