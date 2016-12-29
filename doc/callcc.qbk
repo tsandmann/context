@@ -1,16 +1,22 @@
 [/
-          Copyright Oliver Kowalke 2014.
+          Copyright Oliver Kowalke 2016.
  Distributed under the Boost Software License, Version 1.0.
     (See accompanying file LICENSE_1_0.txt or copy at
           http://www.boost.org/LICENSE_1_0.txt
 ]
 
-[#ecv2]
-[section:ecv2 Class execution_context (version 2)]
+[#cc]
+[section:cc call/cc]
 
-[warning __econtext__ is deprecated.]
+[note __cc__ and __con__ are enabled per default.]
 
-Class __econtext__ encapsulates context switching and manages the associated
+__callcc__ (call with current continuation) is a universal control operator,
+well-known from the programming language Scheme, that captures the current
+continuation as a first-class object.
+
+Using
+
+__cc__ and __con__ encapsulate context switching and manage the associated
 context' stack (allocation/deallocation).
 
 __econtext__ allocates the context stack (using its [link stack
@@ -57,28 +63,26 @@ passed/returned arguments.
 
 [heading usage of __econtext__]
 
-        int n=35;
-        ctx::execution_context<int> source(
-            [n](ctx::execution_context<int> && sink,int) mutable {
+        namespace ctx=boost::context;
+        ctx::continuation c=ctx::callcc(
+            [](ctx::continuation && c){
                 int a=0;
                 int b=1;
-                while(n-->0){
-                    auto result=sink(a);
-                    sink=std::move(std::get<0>(result));
+                for(;;){
+                    c=ctx::callcc(std::move(c),a);
                     auto next=a+b;
                     a=b;
                     b=next;
                 }
-                return std::move(sink);
+                return std::move( c);
             });
-        for(int i=0;i<10;++i){
-            auto result=source(i);
-            source=std::move(std::get<0>(result));
-            std::cout<<std::get<1>(result)<<" ";
+        for ( int j = 0; j < 10; ++j) {
+            c=ctx::callcc(std::move(c));
+            std::cout << ctx::data<int>(c) << " ";
         }
 
         output:
-            0 1 1 2 3 5 8 13 21 34
+            1 1 2 3 5 8 13 21 34 55
 
 This simple example demonstrates the basic usage of __econtext__ as a generator.
 The context `sink` represents the ['main]-context (function ['main()] running).
