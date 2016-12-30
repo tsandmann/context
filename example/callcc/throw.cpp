@@ -23,11 +23,11 @@ struct my_exception : public std::runtime_error {
 };
 
 int main() {
-    ctx::continuation c = ctx::callcc([](ctx::continuation && c) {
+    ctx::continuation c = ctx::callcc< void >([](ctx::continuation && c) {
         for (;;) {
             try {
                 std::cout << "entered" << std::endl;
-                c = ctx::callcc( std::move( c) );
+                c = ctx::callcc< void >( std::move( c) );
             } catch ( my_exception & ex) {
                 std::cerr << "my_exception: " << ex.what() << std::endl;
                 return std::move( ex.c);
@@ -35,7 +35,7 @@ int main() {
         }
         return std::move( c);
     });
-    c = ctx::callcc(
+    c = ctx::callcc< void >(
             std::move( c),
             ctx::exec_ontop_arg,
             [](ctx::continuation & c){
