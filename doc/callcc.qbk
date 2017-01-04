@@ -76,7 +76,7 @@ assigned to a variable or stored in a container.
                 int a=0;
                 int b=1;
                 for(;;){
-                    sink=ctx::callcc(std::move(sink),a);
+                    sink=sink(a);
                     auto next=a+b;
                     a=b;
                     b=next;
@@ -84,7 +84,7 @@ assigned to a variable or stored in a container.
                 return std::move(sink);
             });
         for (int j=0;j<10;++j) {
-            source=ctx::callcc(std::move(source));
+            source=source();
             std::cout << ctx::data<int>(source) << " ";
         }
 
@@ -161,25 +161,26 @@ For use-cases, that require to transfer data of different type:
     namespace ctx=boost::context;
     ctx::continuation f1(ctx::continuation && c) {
         int i=3;
-        c=ctx::callcc(std::move(c),i);
+        c=c(i);
         std::string s{ "abc" };
-        c=ctx::callcc(std::move(c),s);
+        c=c(s);
         i=7;s="xyz";
-        c=ctx::callcc(std::move(c),i,s);
-        c=ctx::callcc(std::move(c));
+        c=c(i,s);
+        c=c();
         return std::move(c);
     }
 
     ctx::continuation c = ctx::callcc( f1);
     int i = ctx::data< int >( c);
     std::cout << "f1: returned : " << i << std::endl;
-    c = ctx::callcc( std::move( c) );
+    c = c();
     std::string s = ctx::data< std::string >( c);
     std::cout << "f1: returned : " << s << std::endl;
-    c = ctx::callcc( std::move( c) );
+    c = c();
     std::tie(i,s)=ctx::data< int, std::string >( c);
     std::cout << "f1: returned : " << i << ", " << s << std::endl;
-    c = ctx::callcc( std::move( c) );
+    c = c();
+    std::tie(i,s)=ctx::data< int, std::string >( c);
     std::cout << std::boolalpha;
     std::cout << "f1: returned data : " << ctx::has_data( c) << std::endl;
 
@@ -211,10 +212,10 @@ return type or void.
     ctx::continuation f1(ctx::continuation && c) {
         int data=ctx::data<int>(c);
         std::cout << "f1: entered first time: " << data  << std::endl;
-        c=ctx::callcc(std::move(c),data+1);
+        c=c(data+1);
         data=ctx::data<int>(c);
         std::cout << "f1: entered second time: " << data  << std::endl;
-        c=ctx::callcc(std::move(c),data+1);
+        c=c(data+1);
         data=ctx::data<int>(c);
         std::cout << "f1: entered third time: " << data << std::endl;
         return std::move(c);
@@ -230,10 +231,10 @@ return type or void.
     ctx::continuation c=ctx::callcc(f1,data+1);
     data=ctx::data<int>(c);
     std::cout << "f1: returned first time: " << data << std::endl;
-    c=ctx::callcc(std::move(c),data+1);
+    c=c(data+1);
     data=ctx::data<int>(c);
     std::cout << "f1: returned second time: " << data << std::endl;
-    c=ctx::callcc(std::move(c),ctx::exec_ontop_arg,f2,-1);
+    c=c(ctx::exec_ontop_arg,f2,-1);
     std::cout << "f1: returned third time" << std::endl;
 
     output:
@@ -266,7 +267,7 @@ an exception.
         for (;;) {
             try {
                 std::cout << "entered" << std::endl;
-                c=ctx::callcc(std::move(c));
+                c=cc();
             } catch (my_exception & ex) {
                 std::cerr << "my_exception: " << ex.what() << std::endl;
                 return std::move(ex.c);
@@ -274,11 +275,10 @@ an exception.
         }
         return std::move(c);
     });
-    c = ctx::callcc(std::move( c),
-                    ctx::exec_ontop_arg,
-                    [](ctx::continuation & c){
-                        throw my_exception(std::move(c),"abc");
-                    });
+    c = c( ctx::exec_ontop_arg,
+           [](ctx::continuation & c){
+               throw my_exception(std::move(c),"abc");
+           });
 
     output:
         entered
@@ -424,7 +424,7 @@ of the stack.]
             Parser p(is,
                      [&sink](char c){
                            // resume main continuation
-                           sink=ctx::callcc(std::move(sink),c);
+                           sink=sink(c);
                      });
                 // start recursive parsing
                 p.run();
@@ -434,7 +434,7 @@ of the stack.]
     while(ctx::has_data(source)){
         char c=ctx::data<char>(source);
         printf("Parsed: %c\n",c);
-        source=ctx::callcc(std::move(source) );
+        source=source();
     }
 
     output:
@@ -469,6 +469,12 @@ The data (character) is transferred between the two continuations.
 
         continuation(continuation const& other) noexcept = delete;
         continuation & operator=(continuation const& other) noexcept = delete;
+
+        template<typename ...Arg>
+        continuation operator()(Arg ...arg);
+
+        template<typename Fn,typename ...Arg>
+        continuation operator()(exec_ontop_arg_t,Fn && fn,Arg ...arg);
 
         explicit operator bool() const noexcept;
 
@@ -528,6 +534,41 @@ e.g. ['continuation::operator bool()] returns `true`.]]
 [variablelist
 [[Effects:] [Moves the state of `other` to `*this` using move semantics.]]
 [[Throws:] [Nothing.]]
+]
+
+[operator_heading cc..operator_call..operator()]
+
+        template<typename ...Arg>
+        continuation operator()(Arg ...arg);
+
+[variablelist
+[[Effects:] [Captures current continuation and resumes continuation `*this`.
+The function with argument type `exec_ontop_arg`, is used to execute function
+`fn` in continuation `c` (e.g. the stack frame of `fn` is allocated on stack of
+`c`).]]
+[[Returns:] [The continuation representing the continuation that has been
+suspended.]]
+[[Note:] [The returned arguments from `fn` are passed as arguments to the
+context-function of resumed continuation.]]
+[[Note:] [The returned continuation indicates if the suspended continuation has
+terminated (return from context-function) via `bool operator()`. If the returned
+continuation has terminated no data are transferred.]]
+]
+
+[operator_heading cc..operator_call_ontop..operator()]
+
+        template<typename Fn,typename ...Arg>
+        continuation operator()(exec_ontop_arg_t,Fn && fn,Arg ...arg);
+
+[variablelist
+[[Effects:] [Same as `operator()(Arg ...)`. Additionally, function `fn` is
+executed in continuation `*this` (e.g. the stack frame of `fn` is allocated on
+stack of continuation represented by `*this`).]]
+[[Returns:] [The continuation representing the continuation that has been
+suspended.]]
+[[Note:] [The returned continuation indicates if the suspended continuation has
+terminated (return from context-function) via `bool operator()`. If the returned
+continuation has terminated no data are transferred.]]
 ]
 
 [operator_heading cc..operator_bool..operator bool]
@@ -637,7 +678,7 @@ returned as `std::tuple<Arg...>` or `Arg` if single parameter.]]
 ]
 
 
-[heading Continuation creation]
+[heading Call with current contunation]
 
     #include <boost/context/continuation.hpp>
 
@@ -660,32 +701,6 @@ top of the stack.
 The arguments, `... arg`, are passed to the current continuation to be
 transferred by the call to `callcc()` in the same thread.]]
 [[Returns:] [The continuation representing the contexcontinuation that has been suspended.]]
-[[Note:] [The returned continuation indicates if the suspended continuation has
-terminated (return from context-function) via `bool operator()`. If the returned
-continuation has terminated no data are transferred.]]
-]
-
-[heading Continuation resumption]
-
-    #include <boost/context/continuation.hpp>
-
-    template<typename ...Arg>
-    continuation callcc(continuation && c,Arg ...arg);
-
-    template<typename Fn,typename ...Arg>
-    continuation callcc(continuation && c,exec_ontop_arg_t,Fn && fn,Arg ...arg);
-
-[variablelist
-[[Effects:] [Captures current continuation and resumes continuation `c`.
-The function with argument type `exec_ontop_arg`, is used to execute function
-`fn` in continuation `c` (e.g. the stack frame of `fn` is allocated on stack of
-`c`).]]
-[[Returns:] [The continuation representing the continuation that has been
-suspended.]]
-[[Note:] [The returned arguments from `fn` are passed as arguments to the
-context-function of resumed continuation.]]
-[[Note:] [Function `fn` needs to return a tuple of arguments ([link cc_ontop see
-description]).]]
 [[Note:] [The returned continuation indicates if the suspended continuation has
 terminated (return from context-function) via `bool operator()`. If the returned
 continuation has terminated no data are transferred.]]

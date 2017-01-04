@@ -66,10 +66,14 @@ exe types
     : types.cpp
     ;
 
+exe endless_echo
+    : endless_echo.cpp
+    ;
+
 #exe backtrace
 #    : backtrace.cpp
 #    ;
-
+#
 #exe echosse
 #    : echosse.cpp
-#    ;
+#;
