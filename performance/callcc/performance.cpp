@@ -23,7 +23,7 @@ namespace ctx = boost::context;
 
 static ctx::continuation foo( ctx::continuation && c) {
     while ( true) {
-        c = ctx::resume( std::move( c) );
+        c = c.resume();
     }
     return std::move( c);
 }
@@ -31,29 +31,11 @@ static ctx::continuation foo( ctx::continuation && c) {
 duration_type measure_time() {
     // cache warum-up
     ctx::continuation c = ctx::callcc( foo);
-    c = ctx::resume( std::move( c) );
+    c = c.resume();
 
     time_point_type start( clock_type::now() );
     for ( std::size_t i = 0; i < jobs; ++i) {
-        c = ctx::resume( std::move( c) );
-    }
-    duration_type total = clock_type::now() - start;
-    total -= overhead_clock(); // overhead of measurement
-    total /= jobs;  // loops
-    total /= 2;  // 2x jump_fcontext
-
-    return total;
-}
-
-duration_type measure_time_() {
-    // cache warum-up
-    ctx::fixedsize_stack alloc;
-    ctx::continuation c = ctx::callcc( std::allocator_arg, alloc, foo);
-    c = ctx::resume( std::move( c) );
-
-    time_point_type start( clock_type::now() );
-    for ( std::size_t i = 0; i < jobs; ++i) {
-        c = ctx::resume( std::move( c), ctx::exec_ontop_arg, [](ctx::continuation &){});
+        c = c.resume();
     }
     duration_type total = clock_type::now() - start;
     total -= overhead_clock(); // overhead of measurement
@@ -68,29 +50,11 @@ cycle_type measure_cycles() {
     // cache warum-up
     ctx::fixedsize_stack alloc;
     ctx::continuation c = ctx::callcc( std::allocator_arg, alloc, foo);
-    c = ctx::resume( std::move( c) );
+    c = c.resume();
 
     cycle_type start( cycles() );
     for ( std::size_t i = 0; i < jobs; ++i) {
-        c = ctx::resume( std::move( c) );
-    }
-    cycle_type total = cycles() - start;
-    total -= overhead_cycle(); // overhead of measurement
-    total /= jobs;  // loops
-    total /= 2;  // 2x jump_fcontext
-
-    return total;
-}
-
-cycle_type measure_cycles_() {
-    // cache warum-up
-    ctx::fixedsize_stack alloc;
-    ctx::continuation c = ctx::callcc( std::allocator_arg, alloc, foo);
-    c = ctx::resume( std::move( c) );
-
-    cycle_type start( cycles() );
-    for ( std::size_t i = 0; i < jobs; ++i) {
-        c = ctx::resume( std::move( c), ctx::exec_ontop_arg, [](ctx::continuation &){});
+        c = c.resume();
     }
     cycle_type total = cycles() - start;
     total -= overhead_cycle(); // overhead of measurement
@@ -126,13 +90,9 @@ int main( int argc, char * argv[]) {
 
         boost::uint64_t res = measure_time().count();
         std::cout << "continuation: average of " << res << " nano seconds" << std::endl;
-        res = measure_time_().count();
-        std::cout << "continuation: average of (ontop) " << res << " nano seconds" << std::endl;
 #ifdef BOOST_CONTEXT_CYCLE
         res = measure_cycles();
         std::cout << "continuation: average of " << res << " cpu cycles" << std::endl;
-        res = measure_cycles_();
-        std::cout << "continuation: average of (ontop) " << res << " cpu cycles" << std::endl;
 #endif
 
         return EXIT_SUCCESS;

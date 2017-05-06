@@ -16,6 +16,9 @@ import toolset ;
 feature.feature segmented-stacks : on : optional propagated composite ;
 feature.compose <segmented-stacks>on : <define>BOOST_USE_SEGMENTED_STACKS ;
 
+feature.feature htm : tsx : optional propagated composite ;
+feature.compose <htm>tsx : <define>BOOST_USE_TSX ;
+
 feature.feature valgrind : on : optional propagated composite ;
 feature.compose <valgrind>on : <define>BOOST_USE_VALGRIND ;
 
@@ -649,7 +652,7 @@ alias asm_context_sources
      <address-model>32
      <architecture>x86
      <binary-format>pe
-     <toolset>clang
+     <toolset>clang-win
    ;
 
 alias asm_context_sources
@@ -796,7 +799,7 @@ alias asm_context_sources
      <address-model>64
      <architecture>x86
      <binary-format>pe
-     <toolset>clang
+     <toolset>clang-win
    ;
 
 alias asm_context_sources
