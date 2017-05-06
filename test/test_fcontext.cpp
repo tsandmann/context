@@ -4,6 +4,11 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -36,7 +41,7 @@ public:
         BOOST_ASSERT( minimum_stacksize() <= size);
         BOOST_ASSERT( maximum_stacksize() >= size);
 
-        void * limit = std::malloc( size);
+        void * limit = malloc( size);
         if ( ! limit) throw std::bad_alloc();
 
         return static_cast< char * >( limit) + size;
@@ -49,7 +54,7 @@ public:
         BOOST_ASSERT( maximum_stacksize() >= size);
 
         void * limit = static_cast< char * >( vp) - size;
-        std::free( limit);
+        free( limit);
     }
 };
 
@@ -140,6 +145,49 @@ void f12( ctx::transfer_t t_) {
     ctx::transfer_t t = ctx::jump_fcontext( t_.fctx, t_.data);
     value1 = * ( int *) t.data;
     ctx::jump_fcontext( t.fctx, t.data);
+}
+
+void f13( ctx::transfer_t t) {
+    {
+        double n1 = 0;
+        double n2 = 0;
+        sscanf("3.14 7.13", "%lf %lf", & n1, & n2);
+        BOOST_CHECK( n1 == 3.14);
+        BOOST_CHECK( n2 == 7.13);
+    }
+    {
+        int n1=0;
+        int n2=0;
+        sscanf("1 23", "%d %d", & n1, & n2);
+        BOOST_CHECK( n1 == 1);
+        BOOST_CHECK( n2 == 23);
+    }
+    {
+        int n1=0;
+        int n2=0;
+        sscanf("1 jjj 23", "%d %*[j] %d", & n1, & n2);
+        BOOST_CHECK( n1 == 1);
+        BOOST_CHECK( n2 == 23);
+    }
+    ctx::jump_fcontext( t.fctx, 0);
+}
+
+void f14( ctx::transfer_t t) {
+    {
+        const char *fmt = "sqrt(2) = %f";
+        char buf[15];
+        snprintf( buf, sizeof( buf), fmt, std::sqrt( 2) );
+        BOOST_CHECK( 0 < sizeof( buf) );
+        BOOST_CHECK_EQUAL( std::string("sqrt(2) = 1.41"), std::string( buf, 14) );
+    }
+    {
+        std::uint64_t n = 0xbcdef1234567890;
+        const char *fmt = "0x%016llX";
+        char buf[100];
+        snprintf( buf, sizeof( buf), fmt, n);
+        BOOST_CHECK_EQUAL( std::string("0x0BCDEF1234567890"), std::string( buf, 18) );
+    }
+    ctx::jump_fcontext( t.fctx, 0);
 }
 
 void test_setup() {
@@ -267,6 +315,23 @@ void test_ontop() {
 	alloc.deallocate( sp, stack_allocator::default_stacksize() );
 }
 
+void test_sscanf() {
+    stack_allocator alloc;
+    void * sp = alloc.allocate( stack_allocator::default_stacksize() );
+    ctx::fcontext_t ctx = ctx::make_fcontext( sp, stack_allocator::default_stacksize(), f13);
+    BOOST_CHECK( ctx);
+    ctx::jump_fcontext( ctx, 0);
+	alloc.deallocate( sp, stack_allocator::default_stacksize() );
+}
+
+void test_snprintf() {
+    stack_allocator alloc;
+    void * sp = alloc.allocate( stack_allocator::default_stacksize() );
+    ctx::fcontext_t ctx = ctx::make_fcontext( sp, stack_allocator::default_stacksize(), f14);
+    ctx::jump_fcontext( ctx, 0);
+	alloc.deallocate( sp, stack_allocator::default_stacksize() );
+}
+
 boost::unit_test::test_suite * init_unit_test_suite( int, char* []) {
     boost::unit_test::test_suite * test =
         BOOST_TEST_SUITE("Boost.Context: context test suite");
@@ -280,6 +345,8 @@ boost::unit_test::test_suite * init_unit_test_suite( int, char* []) {
     test->add( BOOST_TEST_CASE( & test_fp) );
     test->add( BOOST_TEST_CASE( & test_stacked) );
     test->add( BOOST_TEST_CASE( & test_ontop) );
+    test->add( BOOST_TEST_CASE( & test_sscanf) );
+    test->add( BOOST_TEST_CASE( & test_snprintf) );
 
     return test;
 }
